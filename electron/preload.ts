@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppUpdateState, ExplorerImport, GameLaunchState, ModKitApi, Transfer } from '../src/shared'
+import type { AppUpdateState, ExplorerImport, GameLaunchState, InterfaceScale, ModKitApi, Transfer } from '../src/shared'
 
 const invoke = <T>(name: string, ...args: unknown[]): Promise<T> => ipcRenderer.invoke('modkit:' + name, ...args)
 
@@ -24,6 +24,11 @@ const api: ModKitApi = {
   cancelGame: () => invoke('cancel-game'),
   openGameLog: id => invoke('open-game-log', id),
   openGameFolder: id => invoke('open-game-folder', id),
+  onInterfaceScale: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, scale: InterfaceScale) => callback(scale)
+    ipcRenderer.on('modkit:interface-scale', listener)
+    return () => ipcRenderer.removeListener('modkit:interface-scale', listener)
+  },
   setSettings: settings => invoke('set-settings', settings),
   clearCache: () => invoke('clear-cache'),
   mods: id => invoke('mods', id),

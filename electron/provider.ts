@@ -25,7 +25,8 @@ function project(raw: any): CatalogMod {
     id: raw.project_id ?? raw.id, slug: raw.slug, name: raw.title, summary: raw.description,
     author: raw.organization || raw.author || 'Modrinth', downloads: raw.downloads, icon: raw.icon_url || undefined,
     url: 'https://modrinth.com/mod/' + encodeURIComponent(raw.slug),
-    categories: (raw.display_categories ?? raw.categories ?? []).filter((tag: string) => !loaders.some(loader => loader === tag)),
+    categories: (raw.display_categories ?? raw.categories ?? []).filter((tag: string) => tag !== 'babric' && !loaders.some(loader => loader === tag)),
+    babric: (raw.loaders ?? raw.categories ?? []).includes('babric'),
     games: raw.game_versions ?? raw.versions ?? [], loaders: loaders.filter(loader => (raw.loaders ?? raw.categories ?? []).includes(loader))
   }
 }

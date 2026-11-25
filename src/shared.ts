@@ -13,13 +13,13 @@ export function webUrl(value: string, base?: string) {
 
 export interface ProfileInput {
   name: string; directory: string; game: string; loader: GameLoader; loaderVersion: string
-  launcher?: { nickname: string; heapMiB?: number; installed?: boolean }
+  launcher?: { nickname?: string | null; heapMiB?: number; installed?: boolean }
 }
 export interface Profile extends ProfileInput { id: string; updated: number }
-export interface ProfileSettings { name: string; heapMiB?: number; nickname?: string }
+export interface ProfileSettings { name: string; heapMiB?: number; nickname?: string | null }
 export const nicknamePattern = '[A-Za-z0-9_]{3,16}'
 const nicknameRule = new RegExp('^' + nicknamePattern + '$')
-export const validNickname = (value: unknown): value is string => typeof value === 'string' && nicknameRule.test(value)
+export const validNickname = (value: unknown): value is string => typeof value === 'string' && value === value.trim() && nicknameRule.test(value)
 export const gameMemory = { min: 1024, step: 512, default: 3072 }
 export type LauncherLoader = 'vanilla' | 'fabric' | 'forge'
 export interface LauncherRelease { id: string; current: boolean }
@@ -64,7 +64,7 @@ export function contentSource(id?: string): ContentSource {
 }
 export interface CatalogMod {
   id: string; slug: string; name: string; summary: string; author: string; downloads: number; icon?: string
-  categories: string[]; games: string[]; loaders: Loader[]
+  categories: string[]; games: string[]; loaders: Loader[]; babric?: boolean
   url?: string
 }
 export interface RemoteDependency { projectId?: string; versionId?: string; fileName?: string; modId?: string; range?: string; kind: 'required' | 'optional' | 'incompatible' | 'embedded' }
@@ -106,8 +106,15 @@ export interface ModUpdate {
 }
 export interface ModUpdateCheck { updates: ModUpdate[]; checked: number; unrecognized: number }
 export type Theme = 'light' | 'dark'
-export interface Settings { layout: 'grid' | 'list'; parallel: number; notify: boolean; theme: Theme }
-export const defaultSettings: Settings = { layout: 'grid', parallel: 3, notify: true, theme: 'light' }
+export const interfaceScales = [75, 85, 90, 100, 110, 125, 150] as const
+export type InterfaceScale = typeof interfaceScales[number]
+export const validInterfaceScale = (value: unknown): value is InterfaceScale => interfaceScales.some(scale => scale === value)
+export function launchNickname(profile: Profile, globalNickname: string) {
+  if (!profile.launcher) return undefined
+  return profile.launcher.nickname ?? globalNickname
+}
+export interface Settings { scale: InterfaceScale; nickname: string; layout: 'grid' | 'list'; parallel: number; notify: boolean; theme: Theme }
+export const defaultSettings: Settings = { layout: 'grid', parallel: 3, notify: true, theme: 'light', scale: 100, nickname: 'Player' }
 export interface AppState { profiles: Profile[]; activeId: string | null; settings: Settings }
 
 export interface ModKitApi {
@@ -177,5 +184,6 @@ export interface ModKitApi {
   onMods(callback: (id: string) => void): () => void
   onGameStatus(callback: (status: GameLaunchState) => void): () => void
   onExplorerImports(callback: (batches: ExplorerImport[]) => void): () => void
+  onInterfaceScale(listener: (scale: InterfaceScale) => void): () => void
   onAppUpdate(callback: (state: AppUpdateState) => void): () => void
 }

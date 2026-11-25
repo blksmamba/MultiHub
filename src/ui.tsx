@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowDownToLine, Box, Check, CircleAlert, ExternalLink, LoaderCircle, Plus, X } from 'lucide-react'
+import { Anvil, ArrowDownToLine, Box, Check, CircleAlert, ExternalLink, Flame, LayoutGrid, LoaderCircle, Plus, Tag, Tags, X } from 'lucide-react'
 import { contentNames, contentSource, loaderName, type CatalogMod, type Loader, type Profile } from './shared'
 
 export const api = window.modkit
@@ -9,14 +9,14 @@ export const number = new Intl.NumberFormat('ru-RU')
 export const compact = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 })
 export const date = (value: number | string) => new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium' }).format(new Date(value))
 export const bytes = (value: number) => value < 1024 ? value + ' Б' : value < 1024 ** 2 ? number.format(Math.round(value / 1024)) + ' КБ' : new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(value / 1024 ** 2) + ' МБ'
-const names: Record<string, string> = { adventure: 'Приключения', decoration: 'Декор', equipment: 'Снаряжение', food: 'Еда', game_mechanics: 'Механики', library: 'Библиотеки', magic: 'Магия', management: 'Управление', minigame: 'Мини-игры', mobs: 'Мобы', optimization: 'Оптимизация', social: 'Социальное', storage: 'Хранение', technology: 'Технологии', transportation: 'Транспорт', utility: 'Утилиты', worldgen: 'Генерация мира' }
+const names: Record<string, string> = { adventure: 'Приключения', decoration: 'Декор', equipment: 'Снаряжение', food: 'Еда', cursed: 'Необычное', economy: 'Экономика', 'game-mechanics': 'Механики', game_mechanics: 'Механики', library: 'Библиотеки', magic: 'Магия', management: 'Управление', minigame: 'Мини-игры', mobs: 'Мобы', optimization: 'Оптимизация', social: 'Социальное', storage: 'Хранение', technology: 'Технологии', transportation: 'Транспорт', utility: 'Утилиты', worldgen: 'Генерация мира' }
 export const category = (value: string) => names[value] ?? value
 export const profileLabel = (profile: Profile) => 'Minecraft ' + profile.game + ' · ' + loaderName[profile.loader]
 export const modUrl = (slug: string) => 'https://modrinth.com/mod/' + encodeURIComponent(slug)
 export const remoteCompatible = (item: CatalogMod, p: Profile) => item.games.includes(p.game) && item.loaders.some(loader => loader === p.loader)
 
 export function Brand() {
-  return <div className="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M16 4.5 26 10v12L16 27.5 6 22V10zM6 10l10 5.8L26 10M16 15.8v11.7M11 7.2l10 5.8" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
+  return <span className="brand-mark" aria-hidden="true"><img src={import.meta.env.BASE_URL + 'multihub-icon.png'} alt="" /></span>
 }
 
 export function IconTile({ url, large = false }: { url?: string; large?: boolean }) {
@@ -41,12 +41,31 @@ export function ProfileChips({ profile }: { profile: Profile }) {
 export function Skeletons({ count = 6 }: { count?: number }) {
   return <div className="card-grid" aria-label="Загрузка каталога">{Array.from({ length: count }, (_, index) => <div className="skeleton-card" key={index}><span /><i /><i /></div>)}</div>
 }
+const platforms = [
+  { id: 'babric', name: 'Babric', icon: Tags },
+  { id: 'fabric', name: loaderName.fabric, icon: Tag },
+  { id: 'forge', name: loaderName.forge, icon: Anvil },
+  { id: 'neoforge', name: loaderName.neoforge, icon: Flame },
+  { id: 'quilt', name: loaderName.quilt, icon: LayoutGrid },
+] as const
+
+export function PlatformChips({ mod }: { mod: CatalogMod }) {
+  const available = platforms.filter(({ id }) => id === 'babric' ? mod.babric : mod.loaders.includes(id))
+  if (!available.length) return null
+  return <span className="platform-chips" role="group" aria-label="Загрузчики">
+    {available.map(({ id, name, icon: Icon }) => <span className="platform-chip" data-platform={id} key={id}>
+      <Icon size={13} aria-hidden="true" />{name}
+    </span>)}
+  </span>
+}
+
 export function ModCard({ mod, profile, installed, open, add }: { mod: CatalogMod; profile?: Profile; installed: boolean; open: () => void; add: () => void }) {
   const match = profile && remoteCompatible(mod, profile)
   return <article className="mod-card">
     <button className="card-main" onClick={open}>
       <div className="card-top"><IconTile url={mod.icon} /><div className="card-name"><strong>{mod.name}</strong><small>{mod.author}</small></div></div>
       <p>{mod.summary}</p>
+      <PlatformChips mod={mod} />
     </button>
     <div className="card-footer"><span className="downloads"><ArrowDownToLine size={13} />{compact.format(mod.downloads)}</span><span className="card-category">{contentNames[contentSource(mod.id)]}{mod.categories[0] && ' · ' + category(mod.categories[0])}</span>
       {installed ? <span className="installed-check" aria-label="Установлен"><Check size={16} /></span> : <button className="icon-button card-add" title={profile && !match ? 'Проверить версии' : 'План установки'} aria-label={'Добавить ' + mod.name} onClick={profile && !match ? open : add}><Plus size={17} /></button>}

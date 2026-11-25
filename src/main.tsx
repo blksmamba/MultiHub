@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowDownToLine, ArrowUpCircle, Box, CircleAlert, Copy, FolderOpen, Gamepad2, Layers, Map, ScrollText, House, Minus, Moon, Plus, Search, Settings as Gear, ShieldCheck, Sparkles, Square, Sun, X, ScanLine, Check, Clock3 } from 'lucide-react'
-import { defaultSettings, type AppState, type AppUpdateState, type ExplorerImport, type ExplorerIntegration, type LocalMod, type ModUpdateCheck, type Profile, type Settings, type Transfer, type Activity } from './shared'
+import { defaultSettings, interfaceScales, validInterfaceScale, validNickname, type AppState, type AppUpdateState, type ExplorerImport, type ExplorerIntegration, type LocalMod, type ModUpdateCheck, type Profile, type Settings, type Transfer, type Activity } from './shared'
 import { localProblems, platformMod } from './compatibility'
 import { ChangeDialog, InstallDialog, LocalDetails, RetryDialog, Setup } from './dialogs'
 import { Catalog, Detail, Downloads, Heading, Home, MyMods } from './views'
@@ -130,6 +130,7 @@ function App() {
     const offMods = api.onMods(refresh)
     const offImports = api.onExplorerImports(setExplorerImports)
     const offAppUpdate = api.onAppUpdate(setAppUpdate)
+    const offScale = api.onInterfaceScale(scale => setState(current => ({ ...current, settings: { ...current.settings, scale } })))
     api.appUpdateState().then(setAppUpdate).catch(report)
     api.explorerImports().then(setExplorerImports).catch(report)
     const offGameStatus = api.onGameStatus(status => {
@@ -143,7 +144,7 @@ function App() {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); top.current?.focus() }
     }
     document.addEventListener('keydown', key)
-    return () => { offTransfers(); offMods(); offGameStatus(); offImports(); offAppUpdate(); document.removeEventListener('keydown', key) }
+    return () => { offTransfers(); offMods(); offGameStatus(); offImports(); offAppUpdate(); offScale(); document.removeEventListener('keydown', key) }
   }, [])
   useEffect(() => {
     const id = ++request.current
@@ -197,7 +198,7 @@ function App() {
 
   function folder() { if (profile) void api.showFolder(profile.id).catch(report) }
   function setSettings(changes: Partial<Settings>) {
-    void api.setSettings(changes).then(({ settings }) => setState(current => ({ ...current, settings }))).catch(report)
+    void api.setSettings(changes).then(() => setState(current => ({ ...current, settings: { ...current.settings, ...changes } }))).catch(report)
   }
   function activate(id: string) {
     if (id === profile?.id) return
@@ -269,7 +270,7 @@ function App() {
         <div className="sidebar-footer">
           <div className="nav-label">АКТИВНАЯ СБОРКА</div>
           <div className="profile-current" title={profile?.name ?? 'Нет сборки'}>
-            <span className="profile-icon"><Box size={18} /></span><span><strong>{profile?.name ?? 'Нет сборки'}</strong>{profile && <small>{profileLabel(profile)}</small>}</span>
+            <Brand /><span><strong>{profile?.name ?? 'Нет сборки'}</strong>{profile && <small>{profileLabel(profile)}</small>}</span>
           </div>
         </div>
       </aside>
@@ -280,7 +281,7 @@ function App() {
               <Catalog {...local} text={query} setText={setQuery} layout={state.settings.layout} setLayout={layout => setSettings({ layout })} />
             </div>}
             {detail ? <Detail key={detail} id={detail} profile={profile} back={() => setHistory(items => items.slice(0, -1))} install={install} report={report} open={open} /> :
-              page === 'home' ? <Home {...local} setup={setup} create={createGame} launch={launch} gameStatus={gameStatus} report={report} catalog={() => navigate('catalog')} myMods={() => showBuildContent('mods')} activity={activity} modsLoading={modsLoading} modsError={modsError} folder={folder} /> :
+              page === 'home' ? <Home {...local} globalNickname={state.settings.nickname} setup={setup} create={createGame} launch={launch} gameStatus={gameStatus} report={report} catalog={() => navigate('catalog')} myMods={() => showBuildContent('mods')} activity={activity} modsLoading={modsLoading} modsError={modsError} folder={folder} /> :
               page === 'play' ? <BuildsPage state={state} status={gameStatus} launch={launch} activate={activate} remove={removeProfile} create={createGame} connect={setup}
                 updated={profile => setState(current => ({ ...current, profiles: current.profiles.map(item => item.id === profile.id ? { ...item, name: profile.name, launcher: profile.launcher } : item) }))} report={report}>
                 {profile && <BuildContent key={profile.id} profile={profile} tab={buildTab} select={setBuildTab} shaderCatalog={() => navigate('shaders')} report={report}
@@ -309,7 +310,7 @@ function App() {
           setToast({ text: manual ? 'Импорт ждёт обязательные файлы.' : 'Импорт добавлен в очередь.', error: false, downloads: true, id: Date.now() })
         }} />}
       {dialog?.kind === 'setup' && <Setup key="setup" profiles={state.profiles} close={close} saved={next => { setState(next); close(); notify('Сборка подключена') }} />}
-      {dialog?.kind === 'create-game' && <CreateGame key="create-game" fabricGame={dialog.fabricGame} close={close} gameBusy={gameStatus.status === 'preparing' || gameStatus.status === 'running'} saved={next => {
+      {dialog?.kind === 'create-game' && <CreateGame key="create-game" globalNickname={state.settings.nickname} fabricGame={dialog.fabricGame} close={close} gameBusy={gameStatus.status === 'preparing' || gameStatus.status === 'running'} saved={next => {
         setMods([]); setActivity([]); setState(next); close(); navigate('play')
         if (next.activeId) void api.installGame(next.activeId).catch(report)
       }} />}
@@ -347,6 +348,7 @@ function App() {
 function SettingsPage({ state, update, setup, notify, report, appUpdate }: { state: AppState; update: (settings: Partial<Settings>) => void; setup: () => void; notify: (value: string) => void; report: (error: unknown) => void; appUpdate?: AppUpdateState }) {
   const [explorer, setExplorer] = useState<ExplorerIntegration>()
   const [changingExplorer, setChangingExplorer] = useState(false)
+  const [nickname, setNickname] = useState(state.settings.nickname)
   useEffect(() => { let active = true; api.explorerIntegration().then(value => { if (active) setExplorer(value) }).catch(report); return () => { active = false } }, [])
   return <>
     <Heading title="Настройки" subtitle="Оформление, игровые папки и загрузки." />
@@ -360,6 +362,17 @@ function SettingsPage({ state, update, setup, notify, report, appUpdate }: { sta
           <label className="theme-option"><input type="radio" name="theme" checked={state.settings.theme === 'dark'} onChange={() => update({ theme: 'dark' })} /><Moon size={16} />Тёмная</label>
         </fieldset>
       </div>
+      <div className="setting-row">
+        <span><label htmlFor="interface-scale"><strong>Масштаб интерфейса</strong></label><small>Ctrl + / Ctrl − / Ctrl 0</small></span>
+        <div className="heading-actions">
+          <select id="interface-scale" value={state.settings.scale} onChange={event => {
+            const scale = Number(event.target.value)
+            if (validInterfaceScale(scale)) update({ scale })
+          }}>{interfaceScales.map(scale => <option value={scale} key={scale}>{scale}%</option>)}</select>
+          <button className="button secondary small-btn" aria-label="Сбросить масштаб" disabled={state.settings.scale === defaultSettings.scale}
+            onClick={() => update({ scale: defaultSettings.scale })}>Сбросить</button>
+        </div>
+      </div>
       <div className="setting-row"><span><strong>Язык</strong></span><Chip>Русский</Chip></div>
       {explorer?.available && <div className="setting-row"><span><strong>Импорт из Проводника Windows</strong><small>Добавить «Импортировать в MultiHub» в меню JAR-файлов.</small></span>
         <button className={'toggle ' + (explorer.enabled ? 'on' : '')} aria-label="Импорт из Проводника Windows" aria-pressed={explorer.enabled}
@@ -367,6 +380,19 @@ function SettingsPage({ state, update, setup, notify, report, appUpdate }: { sta
             setChangingExplorer(true)
             void api.setExplorerIntegration(!explorer.enabled).then(setExplorer).catch(report).finally(() => setChangingExplorer(false))
           }}><span /></button></div>}
+    </section>
+    <section className="panel settings-panel"><h2>Запуск Minecraft</h2>
+      <form className="setting-row" onSubmit={event => {
+        event.preventDefault()
+        if (validNickname(nickname) && nickname !== state.settings.nickname) update({ nickname })
+      }}>
+        <span><label htmlFor="default-nickname"><strong>Никнейм по умолчанию</strong></label><small id="default-nickname-help">Для локального запуска. 3–16 символов: A–Z, 0–9 и подчёркивание.</small></span>
+        <div className="heading-actions">
+          <input id="default-nickname" className="default-nickname" maxLength={16} value={nickname}
+            aria-describedby="default-nickname-help" aria-invalid={!validNickname(nickname)} onChange={event => setNickname(event.target.value)} />
+          <button className="button secondary small-btn" disabled={!validNickname(nickname) || nickname === state.settings.nickname}>Сохранить</button>
+        </div>
+      </form>
     </section>
     <section className="panel settings-panel"><div className="section-heading"><h2>Игровые папки</h2><button className="button secondary" onClick={setup}><Plus size={16} />Подключить</button></div>
       {state.profiles.length ? state.profiles.map(profile => <div className="setting-row" key={profile.id}><span><strong>{profile.name}</strong><small>{profile.directory}</small></span><button className="button secondary small-btn" onClick={() => void api.showFolder(profile.id).catch(report)}><FolderOpen size={15} />Открыть</button></div>) : <p className="muted">Пока нет подключённых папок.</p>}

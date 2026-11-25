@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
-import { defaultSettings, type Activity, type AppState, type Profile, type ProfileInput, type ProfileSettings, type Settings } from '../src/shared'
+import { defaultSettings, validInterfaceScale, validNickname, type Activity, type AppState, type Profile, type ProfileInput, type ProfileSettings, type Settings } from '../src/shared'
 
 export interface Source { projectId: string; versionId: string }
 
@@ -63,7 +63,7 @@ export class Store {
       updated.launcher = {
         ...profile.launcher,
         ...(settings.heapMiB === undefined ? {} : { heapMiB: settings.heapMiB }),
-        nickname: settings.nickname ?? profile.launcher.nickname,
+        ...(settings.nickname === undefined ? {} : { nickname: settings.nickname }),
       }
     }
     this.db.prepare('UPDATE profiles SET data = ? WHERE id = ?').run(JSON.stringify(updated), updated.id)
@@ -92,7 +92,10 @@ export class Store {
   }
 
   readSettings(): Settings {
-    return { ...defaultSettings, ...this.pref<Partial<Settings>>('settings', {}) }
+    const settings = { ...defaultSettings, ...this.pref<Partial<Settings>>('settings', {}) }
+    if (!validInterfaceScale(settings.scale)) settings.scale = defaultSettings.scale
+    if (!validNickname(settings.nickname)) settings.nickname = defaultSettings.nickname
+    return settings
   }
 
   updateSettings(changes: Partial<Settings>) {

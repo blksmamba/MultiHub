@@ -96,8 +96,8 @@ summary{list-style:none;cursor:pointer}summary::-webkit-details-marker{display:n
 .app-shell{display:flex;width:100vw;height:100vh;flex-direction:column;overflow:hidden}
 .titlebar{height:46px;display:flex;align-items:center;flex-shrink:0;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--panel);-webkit-app-region:drag}
 .title-brand{display:flex;align-items:center;gap:7px;padding-left:16px;font-size:12px;letter-spacing:.005em;color:var(--ink);min-width:145px}
-.brand-mark{display:grid;place-items:center;height:36px;width:36px;flex:0 0 auto;background:var(--action-fill);color:white;border-radius:8px}
-.brand-mark svg{width:26px;height:26px}
+.brand-mark{display:grid;place-items:center;height:36px;width:36px;flex:0 0 auto}
+.brand-mark img{width:40px;height:40px;margin:-2px;object-fit:contain}
 .search-field{display:flex;align-items:center;gap:9px;color:var(--muted);padding:0 11px;min-height:38px;border:1px solid var(--border);border-radius:8px;background:var(--panel);min-width:0}
 .search-field:focus-within{border-color:var(--accent)}
 .search-field input{background:none;border:0;padding:0;min-height:32px;min-width:0;flex:1;color:var(--ink);outline:none}
@@ -405,3 +405,63 @@ progress{display:block;width:100%;height:6px;accent-color:var(--accent);appearan
   .card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home-grid>.mod-card:last-child{display:none}.hero-contents{padding:18px;width:68%}.home-bottom{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important;scroll-behavior:auto!important}}
+
+.platform-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
+.platform-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;border:1px solid color-mix(in srgb,currentColor 24%,transparent);background:color-mix(in srgb,currentColor 9%,var(--panel));color:var(--platform-color,var(--muted));font-size:11px;font-weight:600;line-height:1.4;white-space:nowrap}
+.platform-chip[data-platform=fabric]{--platform-color:#82512e}
+.platform-chip[data-platform=forge]{--platform-color:#404caa}
+.platform-chip[data-platform=neoforge]{--platform-color:#a14426}
+.platform-chip[data-platform=quilt]{--platform-color:#783ca3}
+:root[data-theme=dark] .platform-chip[data-platform=fabric]{--platform-color:#efbb92}
+:root[data-theme=dark] .platform-chip[data-platform=forge]{--platform-color:#acb6ff}
+:root[data-theme=dark] .platform-chip[data-platform=neoforge]{--platform-color:#ffab82}
+:root[data-theme=dark] .platform-chip[data-platform=quilt]{--platform-color:#dfaefc}
+
+.default-nickname{width:10em;max-width:100%}
+@media(max-width:620px){.settings-panel .setting-row{flex-wrap:wrap}.theme-options{flex-wrap:wrap}}
+
+@supports (appearance: base-select) and selector(::picker(select)) {
+  select, select::picker(select) { appearance:base-select }
+  select { gap:7px;align-items:center;cursor:pointer;transition:border-color .14s ease }
+  select:not(:disabled):hover, select:open { border-color:var(--accent) }
+  select:disabled { cursor:default }
+  select::picker-icon { color:var(--muted);transition:rotate .16s ease }
+  select:open::picker-icon { rotate:180deg;color:var(--accent-ink) }
+  select::picker(select) {
+    box-sizing:border-box;
+    margin-block:5px;
+    max-inline-size:min(24rem,calc(100vw - 24px));
+    max-block-size:min(300px,42dvh);
+    padding:4px;
+    border:1px solid var(--border-strong);
+    border-radius:9px;
+    background:var(--panel);
+    color:var(--ink);
+    box-shadow:0 10px 26px var(--shadow);
+    overflow:auto;
+    overscroll-behavior:contain;
+  }
+  select:open::picker(select) { animation:select-picker-in .16s ease-out both }
+  select option {
+    box-sizing:border-box;
+    min-height:30px;
+    padding:5px 8px;
+    gap:9px;
+    border-radius:5px;
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+  select option::checkmark { order:1;margin-inline-start:auto;color:var(--accent-ink) }
+  select option:checked { background:var(--accent-soft);color:var(--accent-ink);font-weight:600 }
+  select option:not(:disabled):is(:hover,:focus-visible) { background:var(--accent-soft);color:var(--accent-ink) }
+  select option:focus-visible { outline:1px solid var(--accent);outline-offset:-1px }
+  select option:disabled { color:var(--muted) }
+}
+@keyframes select-picker-in {
+  from { opacity:0;transform:translateY(-4px) }
+  to { opacity:1;transform:translateY(0) }
+}
+@media (prefers-reduced-motion:reduce) {
+  select, select::picker-icon { transition:none }
+  select:open::picker(select) { animation:none }
+}

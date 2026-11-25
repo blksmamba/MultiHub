@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, shell }
 import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { lstat, realpath } from 'node:fs/promises'
-import { defaultSettings, gameMemory, loaders, shaderStyles, validNickname, webUrl, type AppUpdateAction, type ArchiveKind, type CatalogQuery, type LauncherDraft, type LauncherLoader, type Profile, type ProfileInput, type ProfileSettings, type Settings, type ShaderStyle, type Theme } from '../src/shared'
+import { defaultSettings, gameMemory, interfaceScales, loaders, validInterfaceScale, shaderStyles, validNickname, webUrl, type AppUpdateAction, type ArchiveKind, type CatalogQuery, type LauncherDraft, type LauncherLoader, type Profile, type ProfileInput, type ProfileSettings, type Settings, type ShaderStyle, type Theme } from '../src/shared'
 import { Store } from './db'
 import { discover, inspectDirectory } from './discovery'
 import { checkGame, changeMods, importJars, Installer } from './installer'
@@ -132,7 +132,7 @@ function register() {
     }
     if (nickname !== undefined) {
       if (!profile.launcher) throw new Error('Ник внешней сборки задаётся в её лаунчере.')
-      if (!validNickname(nickname)) throw new Error('В нике должно быть от 3 до 16 латинских букв, цифр или знаков подчёркивания.')
+      if (nickname !== null && !validNickname(nickname)) throw new Error('В нике должно быть от 3 до 16 латинских букв, цифр или знаков подчёркивания.')
     }
     return store.updateProfileSettings(profile, { name, heapMiB, nickname })
   })
@@ -199,11 +199,14 @@ function register() {
   handle('set-settings', (changes: Partial<Settings>) => {
     if (!changes || typeof changes !== 'object' || Array.isArray(changes) ||
       Object.keys(changes).some(key => !Object.hasOwn(defaultSettings, key)) ||
+      ('scale' in changes && !validInterfaceScale(changes.scale)) ||
+      ('nickname' in changes && !validNickname(changes.nickname)) ||
       ('layout' in changes && changes.layout !== 'grid' && changes.layout !== 'list') ||
       ('parallel' in changes && ![1, 2, 3, 4, 5].some(value => value === changes.parallel)) ||
       ('notify' in changes && typeof changes.notify !== 'boolean') ||
       ('theme' in changes && changes.theme !== 'light' && changes.theme !== 'dark')) throw new Error('Некорректные настройки.')
     const state = store.updateSettings(changes)
+    if (changes.scale) window?.webContents.setZoomFactor(state.settings.scale / 100)
     if (changes.theme) {
       nativeTheme.themeSource = changes.theme
       window?.setBackgroundColor(windowBackground[changes.theme])
@@ -436,18 +439,39 @@ function register() {
   }
 }
 
-function openWindow(theme: Theme) {
+function openWindow(store: Store) {
+  const { theme, scale } = store.readSettings()
   nativeTheme.themeSource = theme
   window = new BrowserWindow({
     title: 'MultiHub', width: 1380, height: 880, minWidth: 790, minHeight: 600, frame: false, backgroundColor: windowBackground[theme], show: false,
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
       additionalArguments: ['--modkit-theme=' + theme],
+      zoomFactor: scale / 100,
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
       spellcheck: false
     }
+  })
+  const contents = window.webContents
+  contents.setZoomMode('isolated')
+  contents.on('dom-ready', () => contents.setZoomFactor(store.readSettings().scale / 100))
+  contents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || !input.control || input.alt || input.meta) return
+    const increase = input.key === '+' || input.key === '=' || input.code === 'NumpadAdd'
+    const decrease = input.key === '-' || input.code === 'NumpadSubtract'
+    const reset = input.key === '0' || input.code === 'Numpad0'
+    if (!increase && !decrease && !reset) return
+    event.preventDefault()
+    if (input.isAutoRepeat) return
+    const current = store.readSettings().scale
+    const index = interfaceScales.indexOf(current)
+    const next = reset ? defaultSettings.scale : interfaceScales[index + (increase ? 1 : -1)] ?? current
+    if (next === current) return
+    store.updateSettings({ scale: next })
+    contents.setZoomFactor(next / 100)
+    contents.send('modkit:interface-scale', next)
   })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())
@@ -478,7 +502,7 @@ else {
   app.whenReady().then(() => {
     const { store, appUpdates, receiveImport } = register()
     receive = receiveImport
-    openWindow(store.readSettings().theme)
+    openWindow(store)
     window?.once('ready-to-show', () => void appUpdates.action('check'))
     for (const id of pending) accept(id)
   }).catch(error => { dialog.showErrorBox('MultiHub', String(error)); app.quit() })

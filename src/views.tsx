@@ -4,8 +4,8 @@ import { BuildActions, GameStatusPanel, LaunchButton } from './GameControls'
 import { platformMod, thresholdMismatch } from './compatibility'
 import { ChevronDown } from 'lucide-react'
 import { Activity as ActivityIcon, ArrowDownToLine, ArrowLeft, ArrowRight, Box, Check, ChevronLeft, ChevronRight, CircleAlert, CircleMinus, Clock3, Download, ExternalLink, FileArchive, FolderOpen, HardDrive, LayoutGrid, List, MoreHorizontal, PackageOpen, Plus, Puzzle, RefreshCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
-import { contentNames, contentSource, loaders, loaderName, type ContentSource, type Activity, type CatalogMod, type CatalogQuery, type GameLaunchState, type LocalMod, type Profile, type ProjectDetail, type Settings, type Transfer } from './shared'
-import { api, Busy, bytes, category, Chip, compact, date, Empty, errorText, ErrorBox, IconTile, ModCard, number, OfficialLink, ProfileChips, profileLabel, Skeletons } from './ui'
+import { contentNames, contentSource, launchNickname, loaders, loaderName, type ContentSource, type Activity, type CatalogMod, type CatalogQuery, type GameLaunchState, type LocalMod, type Profile, type ProjectDetail, type Settings, type Transfer } from './shared'
+import { api, Busy, bytes, category, Chip, compact, date, Empty, errorText, ErrorBox, IconTile, ModCard, number, OfficialLink, PlatformChips, ProfileChips, profileLabel, Skeletons } from './ui'
 
 export function useCatalog(query: CatalogQuery) {
   const [data, setData] = useState<{ items: CatalogMod[]; total: number }>()
@@ -29,8 +29,8 @@ export function Heading({ title, subtitle, actions }: { title: string; subtitle?
 export interface BrowseActions { open: (id: string) => void; install: (id: string, version?: string) => void }
 interface Collection extends BrowseActions { profile?: Profile; mods: LocalMod[] }
 
-export function Home({ profile, mods, open, install, setup, create, launch, gameStatus, report, catalog, myMods, activity, modsLoading, modsError, folder }: Collection & {
-  setup: () => void; create: () => void; launch: (id: string) => void; gameStatus: GameLaunchState; report: (error: unknown) => void
+export function Home({ profile, globalNickname, mods, open, install, setup, create, launch, gameStatus, report, catalog, myMods, activity, modsLoading, modsError, folder }: Collection & {
+  globalNickname: string; setup: () => void; create: () => void; launch: (id: string) => void; gameStatus: GameLaunchState; report: (error: unknown) => void
   catalog: () => void; myMods: () => void; activity: Activity[]; modsLoading: boolean; modsError: string; folder: () => void
 }) {
   const popular = useCatalog({ query: '', game: profile?.game ?? '', loader: profile?.loader === 'vanilla' ? '' : profile?.loader ?? '', category: '', sort: 'downloads', side: '', offset: 0 })
@@ -44,7 +44,7 @@ export function Home({ profile, mods, open, install, setup, create, launch, game
       <div className="hero-contents">
         <div className="hero-kicker">{profile ? 'Активная сборка' : 'Minecraft Java Edition'}</div>
         <h2>{profile?.name ?? 'Ваша первая сборка'}</h2>
-        {profile ? <div className="hero-chips"><ProfileChips profile={profile} /></div> : <p>Создайте сборку в MultiHub или подключите игровую папку из другого лаунчера.</p>}
+        {profile ? <div className="hero-chips"><ProfileChips profile={profile} />{profile.launcher && <Chip>Никнейм · {launchNickname(profile, globalNickname)}</Chip>}</div> : <p>Создайте сборку в MultiHub или подключите игровую папку из другого лаунчера.</p>}
         <div className="hero-actions">
           {!profile && <BuildActions create={create} connect={setup} />}
           {profile?.launcher && <LaunchButton status={gameStatus} label="Запустить" needsInstall={profile.launcher.installed === false} start={() => launch(profile.id)} />}
@@ -175,7 +175,7 @@ export function Detail({ id, profile, back, install, report, open }: { id: strin
   return <>
     <button className="button back-link" onClick={back}><ArrowLeft size={17} />Назад</button>
     {error ? <ErrorBox message={error} retry={() => setRetry(value => value + 1)} /> : !project ? <Skeletons count={1} /> : <>
-      <div className="detail-header panel"><IconTile large url={project.icon} /><div className="detail-title"><h1>{project.name}</h1><p>{project.author} · <ArrowDownToLine size={14} /> {compact.format(project.downloads)} скачиваний</p><div className="chips">{project.categories.map(tag => <Chip key={tag}>{category(tag)}</Chip>)}</div></div><div className="detail-actions">
+      <div className="detail-header panel"><IconTile large url={project.icon} /><div className="detail-title"><h1>{project.name}</h1><p>{project.author} · <ArrowDownToLine size={14} /> {compact.format(project.downloads)} скачиваний</p><div className="chips">{project.categories.map(tag => <Chip key={tag}>{category(tag)}</Chip>)}</div><PlatformChips mod={project} /></div><div className="detail-actions">
         {project.url && <button className="button secondary" onClick={() => void api.external(project.url!).catch(report)}><ExternalLink size={16} />{contentNames[contentSource(project.id)]}</button>}
         {!project.url && <Chip>{contentNames[contentSource(project.id)]}</Chip>}
         <button className="button primary" disabled={Boolean(profile && !best && !another)}

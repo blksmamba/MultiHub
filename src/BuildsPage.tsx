@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Box, FolderOpen, Gamepad2, Pencil, Settings2, Trash2 } from 'lucide-react'
 import { BuildActions, GameStatusPanel, LaunchButton } from './GameControls'
-import { gameMemory, loaderName, nicknamePattern, validNickname, type AppState, type GameLaunchState, type LauncherDraft, type LauncherLoader, type LauncherLoaderVersion, type LauncherRelease, type Profile } from './shared'
+import { gameMemory, launchNickname, loaderName, nicknamePattern, validNickname, type AppState, type GameLaunchState, type LauncherDraft, type LauncherLoader, type LauncherLoaderVersion, type LauncherRelease, type Profile } from './shared'
 import { api, Busy, Chip, Empty, ErrorBox, errorText, Modal, number } from './ui'
 import { Heading } from './views'
 
@@ -27,7 +27,7 @@ export function BuildsPage({ state, status, activate, remove, updated, create, c
         const active = current?.id === profile.id
         return <div className="data-row build-row" key={profile.id}>
           <span className="icon-tile">{profile.launcher ? <Gamepad2 size={20} /> : <Box size={20} />}</span>
-          <span><strong>{profile.name}</strong><small>Minecraft {profile.game} · {loaderName[profile.loader]} {profile.loaderVersion}{!profile.launcher && ' · Внешний профиль'}</small></span>
+          <span><strong>{profile.name}</strong><small>Minecraft {profile.game} · {loaderName[profile.loader]} {profile.loaderVersion}{profile.launcher ? ' · Никнейм ' + launchNickname(profile, state.settings.nickname) : ' · Внешний профиль'}</small></span>
           <div className="heading-actions build-actions">
             {active ? <Chip tone="positive">Активная</Chip> : <button className="button secondary small-btn" onClick={() => activate(profile.id)}>Выбрать</button>}
             {active && profile.launcher && <LaunchButton status={status} label="Запустить Minecraft" needsInstall={profile.launcher.installed === false} start={() => launch(profile.id)} />}
@@ -39,7 +39,7 @@ export function BuildsPage({ state, status, activate, remove, updated, create, c
       })}
     </section> : <Empty icon={<Gamepad2 />} title="Сборок пока нет" text="Создайте сборку и скачайте Minecraft или подключите папку из другого лаунчера." />}
     {children}
-    {editing && <BuildSettings profile={editing} close={() => setEditing(undefined)} saved={profile => { updated(profile); setEditing(undefined) }} />}
+    {editing && <BuildSettings profile={editing} globalNickname={state.settings.nickname} close={() => setEditing(undefined)} saved={profile => { updated(profile); setEditing(undefined) }} />}
   </>
 }
 
@@ -50,7 +50,7 @@ const memoryPresets = [
 ]
 const formatMemory = (heapMiB: number) => number.format(heapMiB / 1024) + ' ГБ'
 
-function BuildSettings({ profile, close, saved }: { profile: Profile; close: () => void; saved: (profile: Profile) => void }) {
+function BuildSettings({ profile, globalNickname, close, saved }: { profile: Profile; globalNickname: string; close: () => void; saved: (profile: Profile) => void }) {
   const [name, setName] = useState(profile.name)
   const [nickname, setNickname] = useState(profile.launcher?.nickname ?? '')
   const [heapMiB, setHeapMiB] = useState<number>()
@@ -62,7 +62,7 @@ function BuildSettings({ profile, close, saved }: { profile: Profile; close: () 
   const selected = Math.min(heapMiB ?? configured, limit ?? configured)
   const memoryChanged = heapMiB !== undefined && selected !== configured
   const nicknameChanged = Boolean(profile.launcher && nickname !== (profile.launcher.nickname ?? ''))
-  const valid = Boolean(name.trim()) && (!nicknameChanged || validNickname(nickname)) &&
+  const valid = Boolean(name.trim()) && (!nicknameChanged || nickname === '' || validNickname(nickname)) &&
     (name.trim() !== profile.name || memoryChanged || nicknameChanged)
 
   useEffect(() => {
@@ -78,7 +78,7 @@ function BuildSettings({ profile, close, saved }: { profile: Profile; close: () 
     if (saving || !valid) return
     setSaving(true)
     setError('')
-    try { saved(await api.updateProfileSettings(profile.id, { name, heapMiB: memoryChanged ? selected : undefined, nickname: nicknameChanged ? nickname : undefined })) }
+    try { saved(await api.updateProfileSettings(profile.id, { name, heapMiB: memoryChanged ? selected : undefined, nickname: nicknameChanged ? nickname || null : undefined })) }
     catch (error) { setError(errorText(error)); setSaving(false) }
   }
   return <Modal title={profile.launcher ? 'Настройки сборки' : 'Переименовать сборку'} close={() => { if (!saving) close() }} footer={<>
@@ -88,11 +88,11 @@ function BuildSettings({ profile, close, saved }: { profile: Profile; close: () 
     <form id="build-settings" className="setup-form" onSubmit={event => void submit(event)}>
       <label className="field">Название сборки<input maxLength={100} value={name} disabled={saving} onChange={event => setName(event.target.value)} /></label>
       {profile.launcher && <div className="field">
-        <label htmlFor="build-nickname">Локальный ник</label>
-        <input id="build-nickname" maxLength={16} value={nickname} disabled={saving} aria-describedby="build-nickname-help"
-          aria-invalid={nicknameChanged && !validNickname(nickname)} onChange={event => setNickname(event.target.value)} />
-        <small id="build-nickname-help">3–16 символов: латинские буквы, цифры и подчёркивание. Новый ник применяется при следующем запуске.</small>
-        {nicknameChanged && validNickname(nickname) && <small>Minecraft может считать новый ник другим игроком в мирах и на серверах, где данные привязаны к нику.</small>}
+        <label htmlFor="build-nickname">Никнейм сборки</label>
+        <input id="build-nickname" maxLength={16} value={nickname} placeholder={globalNickname} disabled={saving} aria-describedby="build-nickname-help"
+          aria-invalid={nickname !== '' && !validNickname(nickname)} onChange={event => setNickname(event.target.value)} />
+        <small id="build-nickname-help">Оставьте поле пустым, чтобы использовать общий ник {globalNickname}. Допустимы 3–16 латинских букв, цифр или знаков подчёркивания.</small>
+        {nicknameChanged && (nickname === '' || validNickname(nickname)) && <small>Minecraft может считать новый ник другим игроком в мирах и на серверах, где данные привязаны к нику.</small>}
       </div>}
       {profile.launcher && (limitError ? <ErrorBox message={limitError} /> : limit === undefined ? <Busy label="Определяем доступный объём памяти…" /> :
         <div className="memory-field">
@@ -111,7 +111,7 @@ function BuildSettings({ profile, close, saved }: { profile: Profile; close: () 
   </Modal>
 }
 
-export function CreateGame({ close, saved, gameBusy, fabricGame }: { close: () => void; saved: (state: AppState) => void; gameBusy: boolean; fabricGame?: string }) {
+export function CreateGame({ close, saved, gameBusy, fabricGame, globalNickname }: { globalNickname: string; close: () => void; saved: (state: AppState) => void; gameBusy: boolean; fabricGame?: string }) {
   const [versions, setVersions] = useState<LauncherRelease[]>()
   const [loaders, setLoaders] = useState<LauncherLoaderVersion[]>([])
   const [draft, setDraft] = useState<LauncherDraft>({ name: '', nickname: '', game: '', loader: fabricGame ? 'fabric' : 'vanilla', loaderVersion: '' })
@@ -147,7 +147,7 @@ export function CreateGame({ close, saved, gameBusy, fabricGame }: { close: () =
     return () => { alive = false }
   }, [draft.game, draft.loader, retry])
 
-  const validNick = validNickname(draft.nickname)
+  const validNick = draft.nickname === '' || validNickname(draft.nickname)
   const ready = Boolean(draft.game && validNick && (draft.loader === 'vanilla' || !loading && loaders.length > 0))
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -165,7 +165,7 @@ export function CreateGame({ close, saved, gameBusy, fabricGame }: { close: () =
   </>}>
     <form id="new-game" className="setup-form" onSubmit={event => void submit(event)}>
       <label className="field">Название сборки<input maxLength={75} value={draft.name} placeholder={draft.game ? 'Minecraft ' + draft.game : 'Моя сборка'} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
-      <label className="field">Локальный ник<input required maxLength={16} pattern={nicknamePattern} value={draft.nickname} placeholder="Player" onChange={event => setDraft({ ...draft, nickname: event.target.value })} /></label>
+      <label className="field">Локальный ник<input maxLength={16} pattern={nicknamePattern} value={draft.nickname} placeholder={globalNickname} onChange={event => setDraft({ ...draft, nickname: event.target.value })} /></label>
       <div className="game-form-row">
         <label className="field">Версия Minecraft<select aria-label="Версия Minecraft" value={draft.game} disabled={!versions?.length} onChange={event => setDraft({ ...draft, game: event.target.value, loaderVersion: '' })}>
           <option value="" disabled>Выбрать версию</option>{versions?.map(version => <option key={version.id} value={version.id}>{version.id}{version.current ? ' · Последний релиз' : ''}</option>)}

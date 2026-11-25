@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { appendFile, lstat, mkdir, open, realpath, writeFile } from 'node:fs/promises'
 import { totalmem } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { gameMemory, validNickname, type GameLaunchState, type LauncherDraft, type LauncherLoader, type Profile } from '../src/shared'
+import { gameMemory, launchNickname, validNickname, type GameLaunchState, type LauncherDraft, type LauncherLoader, type Profile } from '../src/shared'
 import type { Store } from './db'
 import { archiveJson, download, downloadAll, extractNatives, jsonFile, localPath, remoteHash, type Download } from './launcher-files'
 import { forgeArtifact, javaManifest, LauncherMetadata, libraryFiles, minecraftAssets, resolveArguments, validId, type GameLibrary, type JavaFiles, type JavaIndex, type VersionProfile } from './launcher-meta'
@@ -57,7 +57,7 @@ export class Launcher {
 
   async create(data: LauncherDraft) {
     if (!data || typeof data.name !== 'string' || !data.name.trim() || data.name.length > 75 ||
-      !validNickname(data.nickname) ||
+      (data.nickname !== '' && !validNickname(data.nickname)) ||
       !validId(data.game) || !['vanilla', 'fabric', 'forge'].includes(data.loader)) {
       throw new Error('Проверьте название сборки, версию игры и ник (3–16 букв, цифр или знаков подчёркивания).')
     }
@@ -72,7 +72,7 @@ export class Launcher {
     await mkdir(directory)
     return this.store.save({
       name: data.name.trim(), directory, game: data.game, loader: data.loader, loaderVersion,
-      launcher: { nickname: data.nickname, installed: false },
+      launcher: { nickname: data.nickname || null, installed: false },
     })
   }
 
@@ -214,14 +214,15 @@ export class Launcher {
       return
     }
 
-    const username = profile.launcher!.nickname
+    const username = launchNickname(profile, this.store.readSettings().nickname)
+    if (!validNickname(username)) throw new Error('Проверьте локальный ник в настройках сборки.')
     const values = {
       auth_player_name: username, auth_uuid: offlineUuid(username), auth_access_token: '0', auth_session: '0',
       user_properties: '{}', user_type: 'legacy', clientid: '', auth_xuid: '',
       version_name: loader?.id ?? vanilla.id, version_type: vanilla.type ?? 'release',
       game_directory: directory, assets_root: join(this.common, 'assets'), assets_index_name: index.id,
       game_assets: join(this.common, 'assets'), natives_directory: nativeDir,
-      launcher_name: 'MultiHub', launcher_version: '0.2.29',
+      launcher_name: 'MultiHub', launcher_version: '0.2.32',
       classpath: [...libraries.artifacts.map(file => file.target), appJar].join(delimiter),
       classpath_separator: delimiter, library_directory: librariesDir,
       path: logConfig ?? '',
