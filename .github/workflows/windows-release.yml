@@ -1,0 +1,66 @@
+name: Windows release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify stable tag
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $version = node -p 'require("./package.json").version'
+          if ($tag -cne "v$version" -or $version -notmatch '^\d+\.\d+\.\d+$') {
+            throw 'A stable release tag must match package.json and have the form v1.2.3.'
+          }
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Tag the release commit on main.' }
+      - run: npm ci
+      - run: npm run dist
+      - name: Save installer and update manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          if-no-files-found: error
+          path: |
+            release/MultiHub-Setup-*-x64.exe
+            release/MultiHub-Setup-*-x64.exe.blockmap
+            release/latest.yml
+
+  draft-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: release
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          installer="release/MultiHub-Setup-${version}-x64.exe"
+          test -s "$installer"
+          test -s "$installer.blockmap"
+          test -s release/latest.yml
+          gh release create "$GITHUB_REF_NAME" "$installer" "$installer.blockmap" release/latest.yml \
+            --draft --verify-tag --generate-notes --title "MultiHub ${version}"
