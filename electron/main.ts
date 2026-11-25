@@ -2,14 +2,15 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, shell }
 import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { lstat, realpath } from 'node:fs/promises'
-import { defaultSettings, gameMemory, loaders, shaderStyles, validNickname, webUrl, type AppUpdateAction, type CatalogQuery, type LauncherDraft, type LauncherLoader, type Profile, type ProfileInput, type ProfileSettings, type Settings, type ShaderStyle, type Theme } from '../src/shared'
+import { defaultSettings, gameMemory, loaders, shaderStyles, validNickname, webUrl, type AppUpdateAction, type ArchiveKind, type CatalogQuery, type LauncherDraft, type LauncherLoader, type Profile, type ProfileInput, type ProfileSettings, type Settings, type ShaderStyle, type Theme } from '../src/shared'
 import { Store } from './db'
 import { discover, inspectDirectory } from './discovery'
 import { checkGame, changeMods, importJars, Installer } from './installer'
 import { gameContentPath, isJar, modsPath, scanMods } from './jars'
 import { importShaderPack, installShaderPack, listShaderPacks, localPacks, shaderRecommendation } from './shaders'
 import { Modrinth } from './provider'
-import { ContentCatalog } from './content'
+import { ContentCatalog, CurseForge } from './content'
+import { installArchive, worlds } from './archives'
 import { optiFineFor, saveOptiFine } from './optifine'
 import { resolvePlan, type ResolvedPlan } from './resolver'
 import { checkModUpdates } from './updates'
@@ -36,6 +37,8 @@ function register() {
   const provider = new Modrinth(store)
   const catalog = new ContentCatalog(provider, store, join(app.getPath('userData'), 'local-content'),
     process.env.MULTIHUB_CURSEFORGE_API_KEY?.trim(), process.env.MULTIHUB_GITHUB_TOKEN?.trim())
+  const curseForgeKey = process.env.MULTIHUB_CURSEFORGE_API_KEY?.trim()
+  const mapSource = curseForgeKey ? new CurseForge(store, curseForgeKey) : undefined
   const authorizedPaths = new Set<string>()
   const plans = new Map<string, { resolved: ResolvedPlan; date: number }>()
   const imports = new Map<string, string[]>()
@@ -331,6 +334,43 @@ function register() {
       const error = await shell.openPath(stat?.isDirectory() ? directory : profile.directory)
       if (error) throw new Error(error)
     }
+  })
+  const archiveKind = (kind: ArchiveKind) => {
+    if (kind !== 'resourcepack' && kind !== 'datapack' && kind !== 'world') throw new Error('Неизвестный тип каталога.')
+    return kind
+  }
+  handle('archive-worlds', (id: string) => worlds(profileFor(id)))
+  handle('archive-search', (id: string, type: ArchiveKind, query: string, offset: number, sort: CatalogQuery['sort'], compatible: boolean) => {
+    const kind = archiveKind(type)
+    const game = profileFor(id).game
+    if (typeof compatible !== 'boolean' || !Number.isSafeInteger(offset) || offset < 0 || offset >= 990 ||
+      !['relevance', 'downloads', 'follows', 'newest', 'updated'].includes(sort)) throw new Error('Некорректные параметры каталога.')
+    const version = compatible ? game : ''
+    const search = field(query, 160)
+    return kind === 'world' ? mapSource?.searchWorlds(version, search, offset, sort) ?? { items: [], total: 0, available: false }
+      : provider.searchPacks(kind, version, search, offset, sort)
+  })
+  handle('archive-install', async (id: string, type: ArchiveKind, project: string, world: string) => {
+    const kind = archiveKind(type)
+    const profile = profileFor(id)
+    const projectId = token(project)
+    if (kind === 'world') {
+      if (!mapSource) throw new Error('Каталог карт требует разрешённого доступа к CurseForge.')
+      const release = await mapSource.worldFile(projectId, profile.game)
+      if (!release.file) return { url: release.manual }
+      return { name: await installer.lock(profile, () => installArchive(profile, kind, '', { file: release.file, source: 'curseforge' })) }
+    }
+    const file = await provider.packFile(kind, projectId, profile.game)
+    if (file.manual) return { url: file.manual }
+    return { name: await installer.lock(profile, () => installArchive(profile, kind, world, { file, source: 'modrinth' })) }
+  })
+  handle('archive-import', async (id: string, type: ArchiveKind, world: string) => {
+    const kind = archiveKind(type)
+    const profile = profileFor(id)
+    const result = await dialog.showOpenDialog(window!, { title: 'Импорт ZIP в сборку', properties: ['openFile'],
+      filters: [{ name: 'ZIP-архивы', extensions: ['zip'] }] })
+    if (!result.filePaths[0]) return null
+    return installer.lock(profile, () => installArchive(profile, kind, world, { path: result.filePaths[0] }))
   })
   handle('shader-recommendation', (id: string) => shaderRecommendation(profileFor(id), provider))
   handle('optifine-release', (id: string) => optiFineFor(profileFor(id)))

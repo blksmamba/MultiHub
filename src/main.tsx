@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowDownToLine, ArrowUpCircle, Box, CircleAlert, Copy, FolderOpen, Gamepad2, House, Minus, Moon, Plus, Search, Settings as Gear, ShieldCheck, Sparkles, Square, Sun, X, ScanLine, Check, Clock3 } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpCircle, Box, CircleAlert, Copy, FolderOpen, Gamepad2, Layers, Map, ScrollText, House, Minus, Moon, Plus, Search, Settings as Gear, ShieldCheck, Sparkles, Square, Sun, X, ScanLine, Check, Clock3 } from 'lucide-react'
 import { defaultSettings, type AppState, type AppUpdateState, type ExplorerImport, type ExplorerIntegration, type LocalMod, type ModUpdateCheck, type Profile, type Settings, type Transfer, type Activity } from './shared'
 import { localProblems, platformMod } from './compatibility'
 import { ChangeDialog, InstallDialog, LocalDetails, RetryDialog, Setup } from './dialogs'
@@ -11,6 +11,7 @@ import { BuildsPage, CreateGame } from './BuildsPage'
 import { BuildContent, type BuildTab } from './BuildContent'
 import { RemoveProfileDialog } from './RemoveProfileDialog'
 import { UpdatesPage } from './UpdatesPage'
+import { ArchiveCatalog } from './ArchiveCatalog'
 import { ShadersPage } from './ShadersPage'
 import { ExplorerImportDialog } from './ExplorerImport'
 import { AppUpdateSection } from './AppUpdateSection'
@@ -20,12 +21,15 @@ import './style.css'
 declare global { interface Window { modkit: import('./shared').ModKitApi } }
 
 const nav = [
-  { label: 'Главная', icon: House, id: 'home', group: 'ОБЗОР' },
+  { label: 'Главная', icon: House, id: 'home' },
   { label: 'Мои сборки', icon: Gamepad2, id: 'play' },
-  { label: 'Каталог модов', icon: Search, id: 'catalog' },
-  { label: 'Обновления', icon: ArrowUpCircle, id: 'updates' },
+  { label: 'Обновления модов', icon: ArrowUpCircle, id: 'updates' },
   { label: 'Диагностика', icon: ScanLine, id: 'diagnostics' },
-  { label: 'Каталог шейдеров', icon: Sparkles, id: 'shaders', group: 'КОНТЕНТ' },
+  { label: 'Моды', icon: Search, id: 'catalog', group: 'КОНТЕНТ' },
+  { label: 'Шейдеры', icon: Sparkles, id: 'shaders' },
+  { label: 'Ресурспаки', icon: Layers, id: 'resourcepack' },
+  { label: 'Датапаки', icon: ScrollText, id: 'datapack' },
+  { label: 'Карты', icon: Map, id: 'world' },
   { label: 'Загрузки', icon: ArrowDownToLine, id: 'downloads', group: 'УПРАВЛЕНИЕ' },
   { label: 'Резервные копии', icon: ShieldCheck, id: 'backups', later: true },
   { label: 'Настройки', icon: Gear, id: 'settings' },
@@ -286,6 +290,7 @@ function App() {
               page === 'shaders' ? <ShadersPage key={profile?.id} profile={profile} mods={mods} modsLoading={modsLoading} modsError={modsError}
                 setup={setup} install={install} enable={file => action('enable', [file])} manageMods={() => showBuildContent('mods')} manageShaders={() => showBuildContent('shaderpacks')}
                 createFabric={fabricGame => setDialog({ kind: 'create-game', fabricGame })} report={report} /> :
+              page === 'resourcepack' || page === 'datapack' || page === 'world' ? <ArchiveCatalog kind={page} profile={profile} setup={setup} /> :
               page === 'updates' ? <UpdatesPage profile={profile} result={profileUpdates?.result} checking={profileUpdates?.checking ?? Boolean(profile && profile.loader !== 'vanilla')} error={profileUpdates?.error ?? ''} check={() => setUpdateRevision(value => value + 1)} report={report}
                 install={update => { if (profile) setDialog({ kind: 'install', profile, project: update.projectId, version: update.versionId, installedVersionId: update.installedVersionId }) }} /> :
               page === 'downloads' ? <Downloads transfers={transfers} retry={transfer => setDialog({ kind: 'retry', transfer })} report={report}

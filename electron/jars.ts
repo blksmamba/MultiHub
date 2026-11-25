@@ -20,7 +20,7 @@ export async function modsPath(profile: Profile, create = false) {
   return gameContentPath(profile, 'mods', create)
 }
 
-export async function gameContentPath(profile: Profile, folder: 'mods' | 'shaderpacks' | 'resourcepacks', create = false) {
+export async function gameContentPath(profile: Profile, folder: 'mods' | 'shaderpacks' | 'resourcepacks' | 'saves', create = false) {
   if ((await realpath(profile.directory)).toLowerCase() !== profile.directory.toLowerCase()) {
     throw new Error('Путь к профилю изменился. Проверьте игровую папку.')
   }

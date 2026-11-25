@@ -10,7 +10,7 @@ export function UpdatesPage({ profile, result, checking, error, check, report, i
 }) {
   const canCheck = profile && profile.loader !== 'vanilla'
   return <>
-    <Heading title="Обновления" subtitle={profile ? profile.name + ' · ' + profileLabel(profile) : undefined}
+    <Heading title="Обновления модов" subtitle={profile ? profile.name + ' · ' + profileLabel(profile) : undefined}
       actions={canCheck && <button className="button secondary" disabled={checking} onClick={check}><RefreshCw size={16} />Проверить обновления</button>} />
     {!profile && <Empty icon={<ArrowUpCircle />} title="Сборка не подключена" text="Подключите или создайте сборку, чтобы проверить её моды." />}
     {profile?.loader === 'vanilla' && <Empty icon={<ArrowUpCircle />} title="Сборка без загрузчика" text="Обновления модов доступны для сборок с загрузчиком." />}

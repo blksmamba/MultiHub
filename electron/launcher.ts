@@ -221,7 +221,7 @@ export class Launcher {
       version_name: loader?.id ?? vanilla.id, version_type: vanilla.type ?? 'release',
       game_directory: directory, assets_root: join(this.common, 'assets'), assets_index_name: index.id,
       game_assets: join(this.common, 'assets'), natives_directory: nativeDir,
-      launcher_name: 'MultiHub', launcher_version: '0.2.28',
+      launcher_name: 'MultiHub', launcher_version: '0.2.29',
       classpath: [...libraries.artifacts.map(file => file.target), appJar].join(delimiter),
       classpath_separator: delimiter, library_directory: librariesDir,
       path: logConfig ?? '',

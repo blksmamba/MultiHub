@@ -35,6 +35,8 @@ export interface GameLaunchState {
 }
 export interface LocalPack { name: string; size?: number }
 export interface ShaderPack extends LocalPack { projectId?: string }
+export type ArchiveKind = 'resourcepack' | 'datapack' | 'world'
+export interface ArchiveProject extends ShaderProject { url: string }
 export type PackFolder = 'shaderpacks' | 'resourcepacks'
 export const shaderStyles = ['atmosphere', 'fantasy', 'realistic', 'vanilla-like'] as const
 export type ShaderStyle = typeof shaderStyles[number]
@@ -157,6 +159,10 @@ export interface ModKitApi {
   showFolder(id: string, file?: string): Promise<void>
   localPacks(id: string, folder: PackFolder): Promise<LocalPack[]>
   openResourceFolder(id: string): Promise<void>
+  archiveWorlds(id: string): Promise<string[]>
+  archiveSearch(id: string, kind: ArchiveKind, query: string, offset: number, sort: CatalogQuery['sort'], compatible: boolean): Promise<{ items: ArchiveProject[]; total: number; available: boolean }>
+  archiveInstall(id: string, kind: ArchiveKind, project: string, world: string): Promise<{ name: string } | { url: string }>
+  archiveImport(id: string, kind: ArchiveKind, world: string): Promise<string | null>
   shaderRecommendation(id: string): Promise<ShaderRecommendation | null>
   optiFineRelease(id: string): Promise<{ release: OptiFineRelease | null; listedForge: string[] }>
   downloadOptiFine(id: string, filename: string): Promise<string>

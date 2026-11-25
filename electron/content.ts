@@ -77,7 +77,7 @@ function cfNumber(id: string) {
   return id.slice(3)
 }
 
-class CurseForge implements Adapter {
+export class CurseForge implements Adapter {
   private api: CachedApi
   private fileBatch = new Map<number, { resolve: (file: any) => void; reject: (error: unknown) => void }[]>()
   constructor(store: Store, key: string) { this.api = new CachedApi(store, 'https://api.curseforge.com/v1', { 'x-api-key': key }, 'CurseForge') }
@@ -95,6 +95,37 @@ class CurseForge implements Adapter {
     }
     const result = await this.api.get('/mods/search?' + params)
     return { items: result.data.map((item: any) => this.project(item)), total: Math.min(990, result.pagination.totalCount) }
+  }
+
+  async searchWorlds(game: string, text: string, offset: number, sort: CatalogQuery['sort']) {
+    const params = new URLSearchParams({ gameId: '432', classId: '17', searchFilter: text, index: String(offset), pageSize: '6' })
+    if (game) params.set('gameVersion', game)
+    if (sort !== 'relevance') {
+      params.set('sortField', { downloads: '6', follows: '2', newest: '11', updated: '3' }[sort])
+      params.set('sortOrder', 'desc')
+    }
+    const result = await this.api.get('/mods/search?' + params)
+    return { items: result.data.filter((raw: any) => raw.classId === 17 && /^[\w-]+$/.test(raw.slug)).map((raw: any) => ({
+      id: 'cf_' + raw.id, slug: raw.slug, name: raw.name, summary: raw.summary,
+      author: raw.authors?.map((author: any) => author.name).join(', ') || 'CurseForge',
+      url: 'https://www.curseforge.com/minecraft/worlds/' + raw.slug,
+    })), total: Math.min(990, result.pagination.totalCount), available: true }
+  }
+
+  async worldFile(id: string, game: string) {
+    const project = await this.raw(id)
+    if (project.classId !== 17 || !/^[\w-]+$/.test(project.slug)) throw new Error('Проект не относится к картам Minecraft.')
+    const params = new URLSearchParams({ gameVersion: game, pageSize: '50' })
+    const result = await this.api.get('/mods/' + cfNumber(id) + '/files?' + params)
+    const files = result.data.filter((file: any) => file.gameVersions?.includes(game) && /\.zip$/i.test(file.fileName))
+      .sort((a: any, b: any) => Number(b.releaseType === 1) - Number(a.releaseType === 1) || Date.parse(b.fileDate) - Date.parse(a.fileDate))
+    const file = files[0]
+    if (!file) throw new Error('Для Minecraft ' + game + ' не найдена совместимая ZIP-карта.')
+    const sha1 = file.hashes?.find((hash: any) => hash.algo === 1)?.value
+    const manual = 'https://www.curseforge.com/minecraft/worlds/' + project.slug + '/files/' + file.id
+    if (project.allowModDistribution !== true || !file.isAvailable || !file.downloadUrl || !/^[a-f0-9]{40}$/i.test(sha1 ?? '') ||
+      file.dependencies?.some((dep: any) => dep.relationType === 3)) return { manual }
+    return { file: { name: file.fileName as string, url: file.downloadUrl as string, size: file.fileLength as number, sha1: sha1 as string } }
   }
 
   private project(raw: any): CatalogMod {

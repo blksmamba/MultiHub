@@ -1,4 +1,4 @@
-import { loaders, webUrl, type CatalogMod, type CatalogQuery, type Profile, type ProjectDetail, type RemoteVersion, type ShaderProject, type ShaderStyle } from '../src/shared'
+import { loaders, webUrl, type ArchiveProject, type CatalogMod, type CatalogQuery, type Profile, type ProjectDetail, type RemoteVersion, type ShaderProject, type ShaderStyle } from '../src/shared'
 import type { Store } from './db'
 import { satisfies } from '../src/compatibility'
 
@@ -95,6 +95,38 @@ export class Modrinth implements CatalogProvider {
       this.request<{ name: string; project_type: string }[]>('/tag/category', undefined, 86400000),
     ])
     return { games: games.filter(item => item.version_type === 'release').map(item => item.version), categories: [...new Set(categories.filter(item => item.project_type === 'mod').map(item => item.name))] }
+  }
+
+  async searchPacks(kind: 'resourcepack' | 'datapack', game: string, text: string, offset: number, sort: CatalogQuery['sort']) {
+    const facets = [[(kind === 'datapack' ? 'categories:' : 'project_type:') + kind]]
+    if (game) facets.push(['versions:' + game])
+    const query = new URLSearchParams({ query: text, facets: JSON.stringify(facets), index: sort, offset: String(offset), limit: '6' })
+    const result = await this.request<{ hits: any[]; total_hits: number }>('/search?' + query)
+    const items: ArchiveProject[] = result.hits.map(raw => {
+      const preview = webUrl(raw.featured_gallery || raw.gallery?.[0] || raw.icon_url)
+      return { url: 'https://modrinth.com/' + kind + '/' + encodeURIComponent(raw.slug), id: raw.project_id, slug: raw.slug, name: raw.title, author: raw.author, summary: raw.description,
+        image: preview?.protocol === 'https:' && ['cdn.modrinth.com', 'cdn-raw.modrinth.com'].includes(preview.hostname) ? preview.href : undefined }
+    })
+    return { items, total: result.total_hits, available: true }
+  }
+
+  async packFile(kind: 'resourcepack' | 'datapack', id: string, game: string) {
+    const project = await this.request<{ project_type: string; loaders?: string[] }>('/project/' + encodeURIComponent(id))
+    if (kind === 'datapack' ? !project.loaders?.includes('datapack') : project.project_type !== kind) throw new Error('Проект относится к другому типу контента.')
+    const query = new URLSearchParams({ game_versions: JSON.stringify([game]), include_changelog: 'false' })
+    const releases = await this.request<any[]>('/project/' + encodeURIComponent(id) + '/version?' + query)
+    const candidates = releases.filter(raw => raw.game_versions?.includes(game) && (kind !== 'datapack' || raw.loaders?.includes('datapack')))
+      .sort((a, b) => Date.parse(b.date_published) - Date.parse(a.date_published))
+      .flatMap(raw => {
+        const files = (raw.files ?? []).filter((file: any) => typeof file.filename === 'string' && /\.zip$/i.test(file.filename) &&
+          typeof file.url === 'string' && Number.isSafeInteger(file.size) && file.size > 0 && /^[a-f0-9]{128}$/i.test(file.hashes?.sha512 ?? ''))
+        const file = files.find((item: any) => item.primary) ?? files[0]
+        return file ? [{ manual: raw.dependencies?.some((dep: any) => dep.dependency_type === 'required') ? 'https://modrinth.com/' + kind + '/' + encodeURIComponent(id) + '/version/' + encodeURIComponent(raw.id) : undefined, type: raw.version_type, name: file.filename, url: file.url, size: file.size, sha512: file.hashes.sha512,
+          projectId: raw.project_id, versionId: raw.id }] : []
+      })
+    const chosen = candidates.find(item => item.type === 'release') ?? candidates[0]
+    if (!chosen) throw new Error('Для Minecraft ' + game + ' не найден совместимый ZIP-пакет.')
+    return chosen
   }
 
   async searchShaders(game: string, text: string, offset: number, sort: CatalogQuery['sort'], style: ShaderStyle | '') {
